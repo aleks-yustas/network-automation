@@ -1,0 +1,17 @@
+[Unit]
+Description=NetOps Automation queue worker
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/netops/netops.env
+ExecStart=/srv/netops/venv/bin/netops-worker --config /etc/netops/netops.yml
+Restart=on-failure
+RestartSec=10
+User=netops
+Group=netops
+WorkingDirectory=/srv/netops
+
+[Install]
+WantedBy=multi-user.target

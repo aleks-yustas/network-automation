@@ -1,0 +1,11 @@
+[Unit]
+Description=NetOps Automation scheduler timer %i
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+Unit=netops-scheduler@%i.service
+
+[Install]
+WantedBy=timers.target
+

@@ -1,0 +1,11 @@
+[Unit]
+Description=NetOps Automation scheduler %i
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/netops/netops.env
+ExecStart=/srv/netops/venv/bin/netops-scheduler --config /etc/netops/netops.yml --schedule /etc/netops/schedules.yml --name %i
+User=netops
+Group=netops
+WorkingDirectory=/srv/netops

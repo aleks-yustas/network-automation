@@ -1,0 +1,18 @@
+# Профили устройств PMON
+# path_template: путь к файлу на устройстве, {date} = YYYYMMDD
+# links_per_file: число линков в одном файле (уточнить после анализа расшифрованных файлов)
+# header_size / record_size: байты (уточнить для каждого типа)
+
+"Pasolink NEO/c":
+  path_template: "/pmon/daily-dmr-{date}.pm"
+  links_per_file: 1
+  header_size: 16
+  record_size: 30
+  records_per_day: 96
+
+"Pasolink NEO":
+  path_template: "/pmon/daily-{date}.pm"
+  links_per_file: 1   # уточнить
+  header_size: 16     # уточнить
+  record_size: 30     # уточнить
+  records_per_day: 96

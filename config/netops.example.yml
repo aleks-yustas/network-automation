@@ -1,0 +1,7 @@
+database_dsn: "postgresql://netops:netops@127.0.0.1:5432/alertmanager"
+worker_id: "netops-worker-1"
+poll_interval_sec: 2
+default_job_timeout_sec: 300
+backoff_base_sec: 60
+backoff_max_sec: 3600
+artifact_dir: "/var/lib/netops/artifacts"

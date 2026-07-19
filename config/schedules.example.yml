@@ -1,0 +1,36 @@
+schedules:
+  nec-cx2200-backup:
+    job_type: "backup_config"
+    scenario: "nec_cx2200_backup_config"
+    transport: "telnet"
+    priority: 200
+    max_attempts: 3
+    timeout_sec: 180
+    idempotency_scope: "daily"
+    credential_purpose: "telnet"
+    device_selector:
+      vendor: "NEC"
+      model: "CX2200"
+    payload:
+      command: "save ftp configuration"
+      login_prompts: ["login:", "Username:"]
+      password_prompts: ["Password:"]
+      shell_prompts: [">", "#"]
+      success_markers: ["success", "completed", "OK"]
+      failure_markers: ["fail", "error", "denied"]
+      processors: ["archive", "postgres_metadata"]
+
+  pasolink-pmon-daily:
+    job_type: "pmon_download"
+    scenario: "download_pmon"
+    transport: "tftp"
+    priority: 100
+    max_attempts: 64
+    timeout_sec: 30
+    expires_after_days: 7
+    idempotency_scope: "target_date"
+    device_selector:
+      vendor: "NEC"
+    payload:
+      target_date: "yesterday"
+      processors: ["archive", "postgres_metadata"]
