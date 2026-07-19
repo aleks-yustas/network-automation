@@ -20,7 +20,7 @@ schedules:
       failure_markers: ["fail", "error", "denied"]
       processors: ["archive", "postgres_metadata"]
 
-  pasolink-pmon-daily:
+  pasolink-pmon-catchup:
     job_type: "pmon_download"
     scenario: "download_pmon"
     transport: "tftp"
@@ -32,5 +32,5 @@ schedules:
     device_selector:
       vendor: "NEC"
     payload:
-      target_date: "yesterday"
+      target_dates: "last_7_days"
       processors: ["archive", "postgres_metadata"]

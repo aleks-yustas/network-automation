@@ -97,10 +97,12 @@ idempotency_scope: "target_date"
 
 Если задача не выполнена за 7 дней, Queue Manager переводит её в `SKIPPED`. Это правильно: после недели файл на РРС уже может отсутствовать.
 
+Scheduler умеет разворачивать PMON-задачи сразу на несколько дат. Для этого используется `target_dates: last_7_days`. При каждом запуске создаются jobs за последние 7 дат, начиная со вчерашней. Уже существующие jobs не дублируются, потому что idempotency key строится по `target_date`.
+
 ## Как должен выглядеть schedule
 
 ```yaml
-pasolink-pmon-daily:
+pasolink-pmon-catchup:
   job_type: "pmon_download"
   scenario: "download_pmon"
   transport: "tftp"
@@ -112,9 +114,11 @@ pasolink-pmon-daily:
   device_selector:
     vendor: "NEC"
   payload:
-    target_date: "yesterday"
+    target_dates: "last_7_days"
     processors: ["archive", "postgres_metadata"]
 ```
+
+`target_dates: last_7_days` означает: scheduler создаёт отдельную задачу на каждую дату в окне хранения PMON. Это полезно после простоя сервера, проблем с сетью или недоступности РРС.
 
 Большое `max_attempts` здесь допустимо, потому что настоящая граница — `expires_at`. Backoff не даст задаче крутиться слишком часто.
 
@@ -134,10 +138,8 @@ pasolink-pmon-daily:
 
 Следующие шаги:
 
-1. Сделать catch-up scheduler за последние 7 дней.
-2. Добавить decoder PMON records.
-3. Добавить проверку полноты 96 интервалов.
-4. Сохранять decoded values в PostgreSQL.
-5. Добавить отчёт: какие РРС/даты не скачаны.
-6. Добавить новые profiles для других типов РРС.
-
+1. Добавить decoder PMON records.
+2. Добавить проверку полноты 96 интервалов.
+3. Сохранять decoded values в PostgreSQL.
+4. Добавить отчёт: какие РРС/даты не скачаны.
+5. Добавить новые profiles для других типов РРС.
