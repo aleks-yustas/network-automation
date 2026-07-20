@@ -24,7 +24,7 @@ NetOps Automation проектируется как единая offline-сис�
 
 И отдельно доменные модули:
 
-- [PMON Module](pmon-module.md) — скачивание PMON с РРС и 7-дневное окно повторов.
+- [PMON Module](pmon-module.md) — скачивание PMON с РРС, catch-up за 7 дней и окно повторов.
 - [Configuration Backup Module](configuration-backup-module.md) — резервное копирование конфигураций, первый сценарий NEC CX2200.
 - [Logs Module](logs-module.md) — будущий модуль скачивания обычных логов, отдельно от PMON.
 - [Observability Module](observability-module.md) — наблюдаемость, аудит, отчёты и диагностика.
@@ -45,4 +45,3 @@ NetOps Automation проектируется как единая offline-сис�
 9. Queue Manager переводит задачу в финальный статус.
 
 Такой поток позволяет добавлять новые устройства и новые сценарии без переписывания очереди, scheduler и worker.
-

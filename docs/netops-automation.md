@@ -86,7 +86,7 @@ psql "$NETOPS_DATABASE_DSN" -f db/migrations/001_init.sql
 netops-scheduler \
   --config config/netops.example.yml \
   --schedule config/schedules.example.yml \
-  --name pasolink-pmon-daily
+  --name pasolink-pmon-catchup
 ```
 
 Выполнить одну задачу:
@@ -97,7 +97,7 @@ netops-worker --config config/netops.example.yml --once
 
 ## PMON и 7 дней хранения
 
-PMON на РРС хранится в течение недели. Поэтому schedule `pasolink-pmon-daily` задаёт:
+PMON на РРС хранится в течение недели. Поэтому schedule `pasolink-pmon-catchup` задаёт:
 
 ```yaml
 expires_after_days: 7
@@ -105,6 +105,8 @@ idempotency_scope: "target_date"
 ```
 
 Это значит: задачу можно повторять несколько дней, но только пока файл ещё потенциально есть на РРС. После истечения окна задача становится `SKIPPED`.
+
+Schedule использует `target_dates: last_7_days`, поэтому после простоя scheduler создаёт задачи за последние 7 дат. Дубли не появляются из-за idempotency key по `target_date`.
 
 ## Inventory для PMON
 
@@ -127,4 +129,3 @@ VALUES (
 
 - `Pasolink NEO/c`: `/pmon/daily-dmr-YYYYMMDD.pm`
 - `Pasolink NEO`: `/pmon/daily-YYYYMMDD.pm`
-

@@ -38,7 +38,7 @@ Scheduler использует:
 Пример PMON:
 
 ```yaml
-pasolink-pmon-daily:
+pasolink-pmon-catchup:
   job_type: "pmon_download"
   scenario: "download_pmon"
   transport: "tftp"
@@ -50,7 +50,7 @@ pasolink-pmon-daily:
   device_selector:
     vendor: "NEC"
   payload:
-    target_date: "yesterday"
+    target_dates: "last_7_days"
     processors: ["archive", "postgres_metadata"]
 ```
 
@@ -78,11 +78,12 @@ enabled = true
 Scheduler делает несколько шагов:
 
 1. Берёт payload из schedule.
-2. Если `target_date: yesterday`, заменяет на реальную дату `YYYYMMDD`.
-3. Добавляет `host` из `mgmt_ip` или `host`.
-4. Если указан `credential_purpose`, добавляет username/secret.
-5. Добавляет объект `target` с именем, vendor, model, site, region.
-6. Добавляет поля из `metadata` устройства.
+2. Если указано `target_dates`, разворачивает один schedule в несколько payload'ов.
+3. Если `target_date: yesterday`, заменяет на реальную дату `YYYYMMDD`.
+4. Добавляет `host` из `mgmt_ip` или `host`.
+5. Если указан `credential_purpose`, добавляет username/secret.
+6. Добавляет объект `target` с именем, vendor, model, site, region.
+7. Добавляет поля из `metadata` устройства.
 
 Так PMON-сценарий получает `device = "Pasolink NEO/c"`, не зная о таблице inventory.
 
@@ -93,6 +94,8 @@ Scheduler защищает очередь от дублей через `idempote
 Для ежедневных задач можно использовать `daily`. Для PMON используется `target_date`, потому что задача за конкретную дату может запускаться и повторяться несколько дней.
 
 Например, PMON за `20260718` должен иметь один job на устройство, даже если scheduler запустился несколько раз.
+
+Для PMON catch-up scheduler создаёт несколько payload'ов: вчера, позавчера и дальше до глубины окна. Каждый payload получает свой `target_date`, поэтому idempotency key тоже становится отдельным для каждой даты.
 
 ## Expiration
 
@@ -108,7 +111,6 @@ target_date + 7 дней
 
 ## План развития
 
-Нужен catch-up scheduler для PMON: он должен не только создавать задачу за вчера, но и находить пропущенные даты за последние 7 дней. Это позволит после простоя системы автоматически догнать недостающие PMON-файлы.
+Нужно добавить dry-run режим, чтобы видеть, какие задачи будут созданы, без записи в БД.
 
-Также нужно добавить dry-run режим, чтобы видеть, какие задачи будут созданы, без записи в БД.
-
+Также стоит добавить проверку полноты: scheduler сможет смотреть `netops_jobs`/`netops_artifacts` и создавать catch-up не за все последние 7 дней, а только за реально отсутствующие даты.

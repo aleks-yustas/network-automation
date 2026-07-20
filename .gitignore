@@ -13,3 +13,6 @@ downloader/data/
 /dist/
 /build/
 *.egg-info/
+.claude/
+skills/
+old/
