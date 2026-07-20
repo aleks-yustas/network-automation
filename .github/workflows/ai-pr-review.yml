@@ -12,81 +12,116 @@ permissions:
 jobs:
   review:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      GITHUB_TOKEN: ${{ github.token }}
+      REVIEW_BOT_TOKEN: ${{ secrets.AI_REVIEW_BOT_TOKEN }}
+      DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Prepare PR context
+      - name: Prepare workspace
+        shell: bash
         run: |
+          set -euo pipefail
+          echo "== Prepare workspace =="
+          rm -rf "$GITHUB_WORKSPACE"
+          mkdir -p "$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+          git init
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git"
+          git fetch --no-tags --prune --depth=50 origin "${BASE_SHA}" "${HEAD_SHA}"
+          git checkout --force "${HEAD_SHA}"
+          git status --short
           mkdir -p .tmp
-          git diff --unified=3 "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > .tmp/pr.diff
-          git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > .tmp/changed-files.txt
+          git diff --unified=3 "${BASE_SHA}" "${HEAD_SHA}" > .tmp/pr.diff
+          git diff --name-only "${BASE_SHA}" "${HEAD_SHA}" > .tmp/changed-files.txt
+          echo "Changed files:"
+          cat .tmp/changed-files.txt || true
+
+      - name: Show runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "== Runtime =="
+          which node
+          node -v
+          which python3
+          python3 --version
+          git --version
 
       - name: Build AI review
-        env:
-          DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
+        shell: bash
         run: |
+          set -euo pipefail
+          echo "== Build AI review =="
+          cd "$GITHUB_WORKSPACE"
           node .github/scripts/ai_pr_review.mjs \
             --repo-root "$GITHUB_WORKSPACE" \
-            --pr-title "${{ github.event.pull_request.title }}" \
-            --pr-number "${{ github.event.pull_request.number }}" \
+            --pr-title "$PR_TITLE" \
+            --pr-number "$PR_NUMBER" \
             --pr-body-file "$GITHUB_EVENT_PATH" \
             --diff-file .tmp/pr.diff \
             --changed-files-file .tmp/changed-files.txt \
             --output .tmp/review.md \
             --json-output .tmp/review.json
-
-      - name: Save review artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ai-pr-review
-          path: |
-            .tmp/review.md
-            .tmp/review.json
+          echo
+          echo "== Review preview =="
+          sed -n '1,220p' .tmp/review.md
 
       - name: Publish PR comment
-        uses: actions/github-script@v7
-        env:
-          REVIEW_PATH: .tmp/review.md
-        with:
-          github-token: ${{ secrets.AI_REVIEW_BOT_TOKEN }}
-          script: |
-            const fs = require("fs");
-            const marker = "<!-- ai-pr-review -->";
-            const review = fs.readFileSync(process.env.REVIEW_PATH, "utf8");
-            const body = `${marker}\n${review}`;
-            const issue_number = context.payload.pull_request.number;
-            const { owner, repo } = context.repo;
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "== Publish PR comment =="
+          cd "$GITHUB_WORKSPACE"
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
 
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner,
-              repo,
-              issue_number,
-              per_page: 100,
-            });
+          repo = os.environ["REPO"]
+          pr_number = os.environ["PR_NUMBER"]
+          token = os.environ["REVIEW_BOT_TOKEN"]
+          marker = "<!-- ai-pr-review -->"
 
-            const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
+          with open(".tmp/review.md", "r", encoding="utf-8") as fh:
+              review = fh.read().strip()
 
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number,
-                body,
-              });
-            }
+          body = f"{marker}\n{review}\n"
+          owner, repo_name = repo.split("/", 1)
+          base = f"https://api.github.com/repos/{owner}/{repo_name}/issues/{pr_number}/comments"
+
+          def request(url, method="GET", payload=None):
+              data = None
+              headers = {
+                  "Authorization": f"Bearer {token}",
+                  "Accept": "application/vnd.github+json",
+                  "User-Agent": "network-automation-ai-review",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              }
+              if payload is not None:
+                  data = json.dumps(payload).encode("utf-8")
+                  headers["Content-Type"] = "application/json"
+              req = urllib.request.Request(url, data=data, headers=headers, method=method)
+              with urllib.request.urlopen(req) as resp:
+                  return json.loads(resp.read().decode("utf-8"))
+
+          comments = request(base)
+          existing = next((item for item in comments if marker in (item.get("body") or "")), None)
+
+          if existing:
+              request(
+                  f"https://api.github.com/repos/{owner}/{repo_name}/issues/comments/{existing['id']}",
+                  method="PATCH",
+                  payload={"body": body},
+              )
+              print(f"Updated comment {existing['id']}")
+          else:
+              created = request(base, method="POST", payload={"body": body})
+              print(f"Created comment {created['id']}")
+          PY

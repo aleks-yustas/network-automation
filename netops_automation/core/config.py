@@ -31,9 +31,11 @@ def load_yaml(path: Path | None) -> dict[str, Any]:
 
 def load_config(path: Path | None = None) -> AppConfig:
     data = load_yaml(path)
-    database_dsn = os.getenv("NETOPS_DATABASE_DSN") or data.get("database_dsn")
-    if not database_dsn:
-        raise ValueError("NETOPS_DATABASE_DSN or database_dsn is required")
+    database_dsn = (
+        os.getenv("NETOPS_DATABASE_DSN")
+        or data.get("database_dsn")
+        or "postgresql://postgres:postgres@localhost/netops"
+    )
 
     return AppConfig(
         database_dsn=database_dsn,
@@ -44,4 +46,3 @@ def load_config(path: Path | None = None) -> AppConfig:
         backoff_max_sec=int(os.getenv("NETOPS_BACKOFF_MAX_SEC") or data.get("backoff_max_sec", 3600)),
         artifact_dir=Path(os.getenv("NETOPS_ARTIFACT_DIR") or data.get("artifact_dir", "/var/lib/netops/artifacts")),
     )
-
