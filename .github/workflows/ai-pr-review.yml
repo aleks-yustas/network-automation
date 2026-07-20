@@ -1,0 +1,92 @@
+name: ai-pr-review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  review:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prepare PR context
+        run: |
+          mkdir -p .tmp
+          git diff --unified=3 "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > .tmp/pr.diff
+          git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > .tmp/changed-files.txt
+
+      - name: Build AI review
+        env:
+          DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
+        run: |
+          node .github/scripts/ai_pr_review.mjs \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --pr-title "${{ github.event.pull_request.title }}" \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --pr-body-file "$GITHUB_EVENT_PATH" \
+            --diff-file .tmp/pr.diff \
+            --changed-files-file .tmp/changed-files.txt \
+            --output .tmp/review.md \
+            --json-output .tmp/review.json
+
+      - name: Save review artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-pr-review
+          path: |
+            .tmp/review.md
+            .tmp/review.json
+
+      - name: Publish PR comment
+        uses: actions/github-script@v7
+        env:
+          REVIEW_PATH: .tmp/review.md
+        with:
+          github-token: ${{ secrets.AI_REVIEW_BOT_TOKEN }}
+          script: |
+            const fs = require("fs");
+            const marker = "<!-- ai-pr-review -->";
+            const review = fs.readFileSync(process.env.REVIEW_PATH, "utf8");
+            const body = `${marker}\n${review}`;
+            const issue_number = context.payload.pull_request.number;
+            const { owner, repo } = context.repo;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
