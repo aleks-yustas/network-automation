@@ -87,12 +87,11 @@ jobs:
           repo = os.environ["REPO"]
           pr_number = os.environ["PR_NUMBER"]
           token = os.environ["REVIEW_BOT_TOKEN"]
-          marker = "<!-- ai-pr-review -->"
 
           with open(".tmp/review.md", "r", encoding="utf-8") as fh:
               review = fh.read().strip()
 
-          body = f"{marker}\n{review}\n"
+          body = f"{review}\n"
           owner, repo_name = repo.split("/", 1)
           base = f"https://api.github.com/repos/{owner}/{repo_name}/issues/{pr_number}/comments"
 
@@ -111,17 +110,6 @@ jobs:
               with urllib.request.urlopen(req) as resp:
                   return json.loads(resp.read().decode("utf-8"))
 
-          comments = request(base)
-          existing = next((item for item in comments if marker in (item.get("body") or "")), None)
-
-          if existing:
-              request(
-                  f"https://api.github.com/repos/{owner}/{repo_name}/issues/comments/{existing['id']}",
-                  method="PATCH",
-                  payload={"body": body},
-              )
-              print(f"Updated comment {existing['id']}")
-          else:
-              created = request(base, method="POST", payload={"body": body})
-              print(f"Created comment {created['id']}")
+          created = request(base, method="POST", payload={"body": body})
+          print(f"Created comment {created['id']}")
           PY
